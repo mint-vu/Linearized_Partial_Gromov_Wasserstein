@@ -1,0 +1,2 @@
+# Linearized_Partial_Gromov_Wasserstein
+Linearized Partial Gromov Wasserstein
