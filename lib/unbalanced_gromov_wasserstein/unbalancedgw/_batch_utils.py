@@ -81,15 +81,10 @@ def l2_distortion(pi, gamma, dx, dy):
     distortion: torch.float of size [Batch]
     L2 distortion between the metric integrated against the plans
     """
-    distxx = torch.einsum(
-        "ijk,ij,ik->i", dx ** 2, pi.sum(dim=2), gamma.sum(dim=2)
-    )
-    distyy = torch.einsum(
-        "ijk,ij,ik->i", dy ** 2, pi.sum(dim=1), gamma.sum(dim=1)
-    )
+    distxx = torch.einsum("ijk,ij,ik->i", dx**2, pi.sum(dim=2), gamma.sum(dim=2))
+    distyy = torch.einsum("ijk,ij,ik->i", dy**2, pi.sum(dim=1), gamma.sum(dim=1))
     distxy = torch.sum(
-        torch.einsum("kij,kjl->kil", dx, pi)
-        * torch.einsum("kij,kjl->kil", gamma, dy),
+        torch.einsum("kij,kjl->kil", dx, pi) * torch.einsum("kij,kjl->kil", gamma, dy),
         dim=(1, 2),
     )
     distortion = distxx + distyy - 2 * distxy
@@ -218,33 +213,28 @@ def compute_local_cost(pi, a, dx, b, dy, eps, rho, rho2, complete_cost=True):
     lcost: torch.Tensor of size [Batch, size_X, size_Y]
     local cost depending on the current transport plan.
     """
-    distxy = torch.einsum(
-        "bij,bkj->bik", dx, torch.einsum("bkl,bjl->bkj", dy, pi)
-    )
+    distxy = torch.einsum("bij,bkj->bik", dx, torch.einsum("bkl,bjl->bkj", dy, pi))
     kl_pi = torch.sum(
-        pi * (pi / (a[:, :, None] * b[:, None, :]) + 1e-10).log(), dim=(1, 2),
+        pi * (pi / (a[:, :, None] * b[:, None, :]) + 1e-10).log(),
+        dim=(1, 2),
     )
     if not complete_cost:
         return -2 * distxy + eps * kl_pi[:, None, None]
 
     mu, nu = torch.sum(pi, dim=2), torch.sum(pi, dim=1)
-    distxx = torch.einsum("bij,bj->bi", dx ** 2, mu)
-    distyy = torch.einsum("bkl,bl->bk", dy ** 2, nu)
+    distxx = torch.einsum("bij,bj->bi", dx**2, mu)
+    distyy = torch.einsum("bkl,bl->bk", dy**2, nu)
 
-    lcost = (
-        distxx[:, :, None] + distyy[:, None, :] - 2 * distxy
-    ) + eps * kl_pi[:, None, None]
+    lcost = (distxx[:, :, None] + distyy[:, None, :] - 2 * distxy) + eps * kl_pi[
+        :, None, None
+    ]
     if rho < float("Inf"):
         lcost = (
-            lcost
-            + rho
-            * torch.sum(mu * (mu / a + 1e-10).log(), dim=1)[:, None, None]
+            lcost + rho * torch.sum(mu * (mu / a + 1e-10).log(), dim=1)[:, None, None]
         )
     if rho2 < float("Inf"):
         lcost = (
-            lcost
-            + rho2
-            * torch.sum(nu * (nu / b + 1e-10).log(), dim=1)[:, None, None]
+            lcost + rho2 * torch.sum(nu * (nu / b + 1e-10).log(), dim=1)[:, None, None]
         )
     return lcost
 
@@ -397,7 +387,7 @@ def optimize_mass(lcost, logpi, a, b, eps, rho, rho2):
     """
     ma, mb = a.sum(dim=1), b.sum(dim=1)
     logmu, lognu = logpi.logsumexp(dim=2), logpi.logsumexp(dim=1)
-    mtot = rho * ma ** 2 + rho2 * mb ** 2 + eps * (ma * mb) ** 2
+    mtot = rho * ma**2 + rho2 * mb**2 + eps * (ma * mb) ** 2
     const = (
         (lcost * logpi.exp()).sum(dim=(1, 2))
         + 2 * ma * rho * (a * (logmu - a.log())).sum(dim=1)
@@ -459,17 +449,13 @@ def log_translate_potential(u, v, lcost, a, b, mass, eps, rho, rho2):
     Second dual potential defined on Y.
     """
     c1 = (
-        -torch.cat((u, v), 1) / (mass[:, None] * rho)
-        + torch.cat((a, b), 1).log()
+        -torch.cat((u, v), 1) / (mass[:, None] * rho) + torch.cat((a, b), 1).log()
     ).logsumexp(dim=1) - torch.log(2 * torch.ones([1]))
     c2 = (
         (
             a.log()[:, :, None]
             + b.log()[:, None, :]
-            + (
-                (u[:, :, None] + v[:, None, :] - lcost)
-                / (mass[:, None, None] * eps)
-            )
+            + ((u[:, :, None] + v[:, None, :] - lcost) / (mass[:, None, None] * eps))
         )
         .logsumexp(dim=2)
         .logsumexp(dim=1)
@@ -479,9 +465,7 @@ def log_translate_potential(u, v, lcost, a, b, mass, eps, rho, rho2):
     return u + k[:, None], v + k[:, None]
 
 
-def log_sinkhorn(
-    lcost, f, g, a, b, mass, eps, rho, rho2, nits_sinkhorn, tol_sinkhorn
-):
+def log_sinkhorn(lcost, f, g, a, b, mass, eps, rho, rho2, nits_sinkhorn, tol_sinkhorn):
     """
     Parameters
     ----------
@@ -599,22 +583,16 @@ def exp_translate_potential(u, v, ecost, a, b, mass, eps, rho, rho2):
     k = k + (b * v ** (-eps / rho)).sum(dim=1)
     k = k / (
         2
-        * (
-            u[:, :, None]
-            * v[:, None, :]
-            * ecost
-            * a[:, :, None]
-            * b[:, None, :]
-        ).sum(dim=(1, 2))
+        * (u[:, :, None] * v[:, None, :] * ecost * a[:, :, None] * b[:, None, :]).sum(
+            dim=(1, 2)
+        )
     )
     z = (0.5 * mass * eps) / (2.0 + 0.5 * (eps / rho) + 0.5 * (eps / rho2))
-    k = k ** z
+    k = k**z
     return u * k[:, None], v * k[:, None]
 
 
-def exp_sinkhorn(
-    ecost, u, v, a, b, mass, eps, rho, rho2, nits_sinkhorn, tol_sinkhorn
-):
+def exp_sinkhorn(ecost, u, v, a, b, mass, eps, rho, rho2, nits_sinkhorn, tol_sinkhorn):
     """
     Parameters
     ----------
@@ -708,14 +686,12 @@ def compute_distance_histograms(a, dx, b, dy):
     """
     h_x = torch.einsum("bij, bj->bi", dx, a / a.sum())
     h_y = torch.einsum("bij, bj->bi", dy, b / b.sum())
-    lcost = (h_x ** 2)[:, :, None] + (h_y ** 2)[:, None, :]
+    lcost = (h_x**2)[:, :, None] + (h_y**2)[:, None, :]
     lcost = lcost - 2 * h_x[:, :, None] * h_y[:, None, :]
     return lcost
 
 
-def compute_batch_flb_plan(
-    a, dx, b, dy, eps, rho, rho2, nits_sinkhorn, tol_sinkhorn
-):
+def compute_batch_flb_plan(a, dx, b, dy, eps, rho, rho2, nits_sinkhorn, tol_sinkhorn):
     """
     Computes the optimal plan associated to the First Lower Bound (FLB)
     defined in [Memoli 11'].It solved the Unbalanced OT problem between
@@ -764,7 +740,7 @@ def compute_batch_flb_plan(
     """
     lcost = compute_distance_histograms(a, dx, b, dy)
     u, v = torch.zeros_like(a), torch.zeros_like(b)
-    mass=torch.tensor([1.0])
+    mass = torch.tensor([1.0])
     u, v = log_translate_potential(u, v, lcost, a, b, mass, eps, rho, rho2)
     # original code is mass=1.0, I think it is a typo
     s_x, s_y = aprox_softmin(lcost, a, b, mass, eps, rho, rho2)

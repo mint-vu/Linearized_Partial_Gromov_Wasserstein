@@ -1,13 +1,22 @@
 import torch
-from ._batch_utils import init_plan, compute_local_cost, \
-    log_sinkhorn, exp_sinkhorn
+from ._batch_utils import init_plan, compute_local_cost, log_sinkhorn, exp_sinkhorn
 
 
-def log_batch_ugw_sinkhorn(a, dx, b, dy, init=None, eps=1.0,
-                           rho=float("Inf"), rho2=None,
-                           nits_plan=3000, tol_plan=1e-6,
-                           nits_sinkhorn=3000, tol_sinkhorn=1e-6,
-                           two_outputs=False):
+def log_batch_ugw_sinkhorn(
+    a,
+    dx,
+    b,
+    dy,
+    init=None,
+    eps=1.0,
+    rho=float("Inf"),
+    rho2=None,
+    nits_plan=3000,
+    tol_plan=1e-6,
+    nits_sinkhorn=3000,
+    tol_sinkhorn=1e-6,
+    two_outputs=False,
+):
     """Solves the regularized UGW problem, keeps only one plan as output.
     the algorithm is run as much as possible in log-scale.
 
@@ -73,18 +82,24 @@ def log_batch_ugw_sinkhorn(a, dx, b, dy, init=None, eps=1.0,
         lcost = compute_local_cost(logpi.exp(), a, dx, b, dy, eps, rho, rho2)
         logmp = logpi.logsumexp(dim=(1, 2))
         up, vp, logpi = log_sinkhorn(
-            lcost, up, vp, a, b, logmp.exp() + 1e-10, eps, rho, rho2,
-            nits_sinkhorn, tol_sinkhorn
+            lcost,
+            up,
+            vp,
+            a,
+            b,
+            logmp.exp() + 1e-10,
+            eps,
+            rho,
+            rho2,
+            nits_sinkhorn,
+            tol_sinkhorn,
         )
         if torch.any(torch.isnan(logpi)):
             raise Exception(
                 f"Solver got NaN plan with params (eps, rho, rho2) "
                 f" = {eps, rho, rho2}. Try increasing argument eps."
             )
-        logpi = (
-                0.5 * (logmp - logpi.logsumexp(dim=(1, 2)))[:, None, None]
-                + logpi
-        )
+        logpi = 0.5 * (logmp - logpi.logsumexp(dim=(1, 2)))[:, None, None] + logpi
         if (logpi - logpi_prev).abs().max().item() < tol_plan:
             break
 
@@ -93,11 +108,21 @@ def log_batch_ugw_sinkhorn(a, dx, b, dy, init=None, eps=1.0,
     return logpi.exp()
 
 
-def exp_batch_ugw_sinkhorn(a, dx, b, dy, init=None, eps=1.0,
-                           rho=float("Inf"), rho2=None,
-                           nits_plan=3000, tol_plan=1e-6,
-                           nits_sinkhorn=3000, tol_sinkhorn=1e-6,
-                           two_outputs=False):
+def exp_batch_ugw_sinkhorn(
+    a,
+    dx,
+    b,
+    dy,
+    init=None,
+    eps=1.0,
+    rho=float("Inf"),
+    rho2=None,
+    nits_plan=3000,
+    tol_plan=1e-6,
+    nits_sinkhorn=3000,
+    tol_sinkhorn=1e-6,
+    two_outputs=False,
+):
     """Solves the regularized UGW problem, keeps only one plan as output.
     the algorithm is run as much as possible in log-scale.
 
@@ -161,11 +186,12 @@ def exp_batch_ugw_sinkhorn(a, dx, b, dy, init=None, eps=1.0,
     for i in range(nits_plan):
         pi_prev = pi.clone()
         mp = pi.sum(dim=(1, 2))
-        ecost = (-compute_local_cost(pi, a, dx, b, dy, eps, rho, rho2) /
-                 (eps * mp[:, None, None])).exp()
+        ecost = (
+            -compute_local_cost(pi, a, dx, b, dy, eps, rho, rho2)
+            / (eps * mp[:, None, None])
+        ).exp()
         up, vp, pi = exp_sinkhorn(
-            ecost, up, vp, a, b, mp, eps, rho, rho2,
-            nits_sinkhorn, tol_sinkhorn
+            ecost, up, vp, a, b, mp, eps, rho, rho2, nits_sinkhorn, tol_sinkhorn
         )
         if torch.any(torch.isnan(pi)):
             raise Exception(

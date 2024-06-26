@@ -17,7 +17,7 @@ def dist_matrix(x_i, y_j, p=2):
         return (x_i[:, :, None, :] - y_j[:, None, :, :]).norm(p=2, dim=3) ** 2
     else:
         c_e = (x_i[:, :, None, :] - y_j[:, None, :, :]).norm(p=2, dim=3)
-        return c_e ** p
+        return c_e**p
 
 
 def generate_measure(n_batch, n_sample, n_dim, equal=False):

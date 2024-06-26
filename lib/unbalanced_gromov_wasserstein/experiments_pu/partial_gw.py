@@ -51,23 +51,23 @@ def compute_cost_matrices(P, U, prior, nb_dummies=0):
         weigths of the U dataset
     """
     # Positive dataset with dummy points
-    n_unl_pos = int(U.shape[0]*prior)
+    n_unl_pos = int(U.shape[0] * prior)
     P_ = P.copy()
     P_ = np.vstack([P_, np.zeros((nb_dummies, P.shape[1]))])
 
     # weigths
-    mu = (np.ones(len(P_))/(len(P_)-nb_dummies))*(n_unl_pos/len(U))
+    mu = (np.ones(len(P_)) / (len(P_) - nb_dummies)) * (n_unl_pos / len(U))
     if nb_dummies > 0:
-        mu[-nb_dummies:] = (1 - np.sum(mu[:-nb_dummies]))/nb_dummies
+        mu[-nb_dummies:] = (1 - np.sum(mu[:-nb_dummies])) / nb_dummies
     else:
         mu = mu / np.sum(mu)
-    nu = np.ones(len(U))/len(U)
+    nu = np.ones(len(U)) / len(U)
 
     # intra-domain
     C1 = sp.spatial.distance.cdist(P_, P_)
     C2 = sp.spatial.distance.cdist(U, U)
     if nb_dummies > 0:
-        C1[:, -nb_dummies:] = C1[-nb_dummies:, :] = C2.max()*1e2
+        C1[:, -nb_dummies:] = C1[-nb_dummies:, :] = C2.max() * 1e2
         C1[-nb_dummies:, -nb_dummies:] = 0
 
     # inter-domain (if data in the same dimension)
@@ -100,12 +100,12 @@ def gwgrad(C1, C2, T):
     numpy.array of shape (n_p+nb_dummies, n_u)
         gradient
     """
-    constC1 = np.dot(C1**2/2, np.dot(T, np.ones(C2.shape[0]).reshape(-1, 1)))
-    constC2 = np.dot(np.dot(np.ones(C1.shape[0]).reshape(1, -1), T), C2**2/2)
+    constC1 = np.dot(C1**2 / 2, np.dot(T, np.ones(C2.shape[0]).reshape(-1, 1)))
+    constC2 = np.dot(np.dot(np.ones(C1.shape[0]).reshape(1, -1), T), C2**2 / 2)
     constC = constC1 + constC2
     A = -np.dot(C1, T).dot(C2.T)
     tens = constC + A
-    return tens*2
+    return tens * 2
 
 
 def gwloss(C1, C2, T):
@@ -126,7 +126,7 @@ def gwloss(C1, C2, T):
     -------
     loss
     """
-    g = gwgrad(C1, C2, T)*0.5
+    g = gwgrad(C1, C2, T) * 0.5
     return np.sum(g * T)
 
 
@@ -174,7 +174,7 @@ def pu_gw_emd(C1, C2, p, q, nb_dummies=1, G0=None, log=False, max_iter=20):
         G0 = np.outer(p, q)
         G0[-nb_dummies:] = 0
     else:
-        mask = (G0 < 1e-7)
+        mask = G0 < 1e-7
         G0[mask] = 0
         G0[-nb_dummies:] = 0
 
@@ -185,18 +185,21 @@ def pu_gw_emd(C1, C2, p, q, nb_dummies=1, G0=None, log=False, max_iter=20):
 
     # step 8 of alg. 1
     C1_grad = C1.copy()
-    C1_grad[-nb_dummies:, -nb_dummies:] = np.quantile(C1[:-nb_dummies, :-nb_dummies], 0.75)
+    C1_grad[-nb_dummies:, -nb_dummies:] = np.quantile(
+        C1[:-nb_dummies, :-nb_dummies], 0.75
+    )
 
     C1_nodummies = C1[:-nb_dummies, :-nb_dummies]
     C2_nodummies = C2.copy()
 
-    loss = gwloss(C1_nodummies, C2_nodummies, G0[:C1_nodummies.shape[0],
-                                                 :C2_nodummies.shape[0]]) # Compute tensor on nodummy matrix
+    loss = gwloss(
+        C1_nodummies, C2_nodummies, G0[: C1_nodummies.shape[0], : C2_nodummies.shape[0]]
+    )  # Compute tensor on nodummy matrix
 
     while loop:
         # Collect the appropriate submatrix
         idx_pos = np.where(np.sum(G0, axis=0) > 1e-7)[0]
-        mask = (G0 > 1e-7)
+        mask = G0 > 1e-7
 
         C2_current = C2[idx_pos, :]
         C2_current = C2_current[:, idx_pos]
@@ -211,7 +214,7 @@ def pu_gw_emd(C1, C2, p, q, nb_dummies=1, G0=None, log=False, max_iter=20):
 
         # step 9 of alg.1
         idx = 0
-        for i in idx_pos: # Copy SOME columns of M into M_emd
+        for i in idx_pos:  # Copy SOME columns of M into M_emd
             M_emd[:-nb_dummies, i] = M[:, idx]
             idx += 1
         M_emd[-nb_dummies:] = M_emd.max() * 1e3
@@ -220,15 +223,18 @@ def pu_gw_emd(C1, C2, p, q, nb_dummies=1, G0=None, log=False, max_iter=20):
         # step 10 of alg.1
         Gc, logemd = ot.lp.emd(p, q, M_emd, log=True)
 
-        if logemd['warning'] is not None:
+        if logemd["warning"] is not None:
             loop = False
             print("Error in the EMD!!!!!!!")
 
         G0 = Gc
 
         prevloss = loss
-        loss = gwloss(C1_nodummies, C2_nodummies, G0[:C1_nodummies.shape[0],
-                                                     :C2_nodummies.shape[0]])
+        loss = gwloss(
+            C1_nodummies,
+            C2_nodummies,
+            G0[: C1_nodummies.shape[0], : C2_nodummies.shape[0]],
+        )
         t_loss.append(loss)
         if it > max_iter:
             loop = False
@@ -242,7 +248,9 @@ def pu_gw_emd(C1, C2, p, q, nb_dummies=1, G0=None, log=False, max_iter=20):
         return G0
 
 
-def compute_perf_pgw(dataset_p, dataset_u, n_pos, n_unl, prior, nb_reps, name_path, nb_dummies=1):
+def compute_perf_pgw(
+    dataset_p, dataset_u, n_pos, n_unl, prior, nb_reps, name_path, nb_dummies=1
+):
     """Compute the performances of running the partial-GW for a PU learning
     task on a given dataset several times
 
@@ -283,8 +291,9 @@ def compute_perf_pgw(dataset_p, dataset_u, n_pos, n_unl, prior, nb_reps, name_pa
 
     for i in range(nb_reps):
         # Preprocess data
-        P, U, y_u = utils.draw_p_u_dataset_scar(dataset_p, dataset_u, n_pos,
-                                                n_unl, prior, i)  #     seed=i
+        P, U, y_u = utils.draw_p_u_dataset_scar(
+            dataset_p, dataset_u, n_pos, n_unl, prior, i
+        )  #     seed=i
         Ctot, C1, C2, mu, nu = compute_cost_matrices(P, U, prior, nb_dummies)
         nb_unl_pos = int(np.sum(y_u))
 
@@ -304,7 +313,9 @@ def compute_perf_pgw(dataset_p, dataset_u, n_pos, n_unl, prior, nb_reps, name_pa
         transp_emd_best = None
         for init in Ginit:
             # Compute plan for given init
-            transp_emd, t_loss = pu_gw_emd(C1, C2, mu, nu, nb_dummies, G0=init, log=True)
+            transp_emd, t_loss = pu_gw_emd(
+                C1, C2, mu, nu, nb_dummies, G0=init, log=True
+            )
 
             # Keep the plan if it diminishes the loss
             if t_loss[-1] < best_loss:
@@ -313,13 +324,17 @@ def compute_perf_pgw(dataset_p, dataset_u, n_pos, n_unl, prior, nb_reps, name_pa
 
         # Compute th marginal (light in memory) and Save the best plan
         # marginal = np.sum(transp_emd_best[:n_pos,:], axis=0)
-        np.save(path + f'/partial_gw_plan_{dataset_p}_{n_pos}_{dataset_u}_{n_unl}_prior{prior}_reps{i}.npy',
-                transp_emd_best)
+        np.save(
+            path
+            + f"/partial_gw_plan_{dataset_p}_{n_pos}_{dataset_u}_{n_unl}_prior{prior}_reps{i}.npy",
+            transp_emd_best,
+        )
     return
 
 
-
-def compute_perf_init(dataset_p, dataset_u, n_pos, n_unl, prior, nb_reps, name_path, nb_dummies=1):
+def compute_perf_init(
+    dataset_p, dataset_u, n_pos, n_unl, prior, nb_reps, name_path, nb_dummies=1
+):
     """Compute the performances of running the partial-GW for a PU learning
     task on a given dataset several times
 
@@ -360,8 +375,9 @@ def compute_perf_init(dataset_p, dataset_u, n_pos, n_unl, prior, nb_reps, name_p
 
     for i in range(nb_reps):
         # Preprocess data
-        P, U, y_u = utils.draw_p_u_dataset_scar(dataset_p, dataset_u, n_pos,
-                                                n_unl, prior, i)  #     seed=i
+        P, U, y_u = utils.draw_p_u_dataset_scar(
+            dataset_p, dataset_u, n_pos, n_unl, prior, i
+        )  #     seed=i
         Ctot, C1, C2, mu, nu = compute_cost_matrices(P, U, prior, nb_dummies)
 
         # Store list of initialisation
@@ -369,8 +385,11 @@ def compute_perf_init(dataset_p, dataset_u, n_pos, n_unl, prior, nb_reps, name_p
 
         # Compute th marginal (light in memory) and Save the best plan
         # marginal = np.sum(transp_emd_best[:n_pos,:], axis=0)
-        np.save(path + f'/partial_gw_init_{dataset_p}_{n_pos}_{dataset_u}_{n_unl}_prior{prior}_reps{i}.npy',
-                T)
+        np.save(
+            path
+            + f"/partial_gw_init_{dataset_p}_{n_pos}_{dataset_u}_{n_unl}_prior{prior}_reps{i}.npy",
+            T,
+        )
     return
 
 
@@ -406,12 +425,16 @@ def initialisation_gw(p, q, Cs, U, prior=0, nb_init=5, nb_dummies=1):
 
     """
     if nb_init > 2:
-        res, _, _ = wass_bary_coarsening(nb_init, np.array(U),
-                                         pt=np.ones(U.shape[0])/(U.shape[0]))
+        res, _, _ = wass_bary_coarsening(
+            nb_init, np.array(U), pt=np.ones(U.shape[0]) / (U.shape[0])
+        )
     else:
-        res, _, _ = wass_bary_coarsening(nb_init, np.array(U),
-                                         pt=np.ones(U.shape[0])/(U.shape[0]),
-                                         pb=[prior, 1-prior])
+        res, _, _ = wass_bary_coarsening(
+            nb_init,
+            np.array(U),
+            pt=np.ones(U.shape[0]) / (U.shape[0]),
+            pb=[prior, 1 - prior],
+        )
     idx = []
     l_gamma = []
     for i in range(nb_init):
@@ -419,9 +442,9 @@ def initialisation_gw(p, q, Cs, U, prior=0, nb_init=5, nb_dummies=1):
         gamma = np.zeros((len(p) + nb_dummies, len(q)))
 
         Ct_0 = cdist(U.iloc[idx], U.iloc[idx])
-        gamma1 = gromov_wasserstein(Cs, Ct_0, p,
-                                    np.ones(Ct_0.shape[0]) / Ct_0.shape[0],
-                                    'square_loss')
+        gamma1 = gromov_wasserstein(
+            Cs, Ct_0, p, np.ones(Ct_0.shape[0]) / Ct_0.shape[0], "square_loss"
+        )
         gamma1 /= np.sum(gamma1)
         for i in range(len(idx)):
             gamma[:-nb_dummies, idx[i]] = gamma1[:, i]
@@ -470,15 +493,15 @@ def wass_bary_coarsening(n, U, pt=None, pb=None):
     tol = 1e-9
     max_iter = 100
 
-    while((err > tol) and cpt < max_iter):
+    while (err > tol) and cpt < max_iter:
         Tprev = T.copy()
         X = np.dot(U.T, T.T).dot(pb_diag)
         M = sp.spatial.distance.cdist(X.T, U)
         if cpt == 0:
             Mmax = M.max()
-        T, logemd = ot.emd(pb, pt/np.sum(pt), M/Mmax, log=True)
-        if logemd['warning'] is not None:
-            print(logemd['warning'])
+        T, logemd = ot.emd(pb, pt / np.sum(pt), M / Mmax, log=True)
+        if logemd["warning"] is not None:
+            print(logemd["warning"])
         err = np.linalg.norm(T - Tprev)
         cpt += 1
-    return T, X.T, np.sum(np.sum(M*T))
+    return T, X.T, np.sum(np.sum(M * T))

@@ -3,6 +3,7 @@ import torch
 
 # TODO: Remove batch from docstrings
 
+
 def quad_kl_div(pi, gamma, ref):
     """Compute the quadratic entropy (KL^otimes(pi otimes gamma | ref))
     with full plans
@@ -22,11 +23,10 @@ def quad_kl_div(pi, gamma, ref):
     """
     massp, massg = pi.sum(), gamma.sum()
     div = (
-            massg * torch.sum(pi * (pi / ref + 1e-10).log())
-            + massp
-            * torch.sum(gamma * (gamma / ref + 1e-10).log())
-            - massp * massg
-            + ref.sum() ** 2
+        massg * torch.sum(pi * (pi / ref + 1e-10).log())
+        + massp * torch.sum(gamma * (gamma / ref + 1e-10).log())
+        - massp * massg
+        + ref.sum() ** 2
     )
     return div
 
@@ -53,15 +53,10 @@ def l2_distortion(pi, gamma, dx, dy):
     distortion: torch.float of size [Batch]
     L2 distortion between the metric integrated against the plans
     """
-    distxx = torch.einsum(
-        "jk,j,k", dx ** 2, pi.sum(dim=1), gamma.sum(dim=1)
-    )
-    distyy = torch.einsum(
-        "jk,j,k", dy ** 2, pi.sum(dim=0), gamma.sum(dim=0)
-    )
+    distxx = torch.einsum("jk,j,k", dx**2, pi.sum(dim=1), gamma.sum(dim=1))
+    distyy = torch.einsum("jk,j,k", dy**2, pi.sum(dim=0), gamma.sum(dim=0))
     distxy = torch.sum(
-        torch.einsum("ij,jl->il", dx, pi)
-        * torch.einsum("ij,jl->il", gamma, dy)
+        torch.einsum("ij,jl->il", dx, pi) * torch.einsum("ij,jl->il", gamma, dy)
     )
     distortion = distxx + distyy - 2 * distxy
     return distortion
@@ -106,9 +101,7 @@ def ugw_cost(pi, gamma, a, dx, b, dy, eps, rho, rho2):
     cost: torch.float of size [Batch]
     Value of the UGW functionnal for each batch of input.
     """
-    cost = l2_distortion(
-        pi, gamma, dx, dy
-    ) + eps * quad_kl_div(
+    cost = l2_distortion(pi, gamma, dx, dy) + eps * quad_kl_div(
         pi, gamma, a[:, None] * b[None, :]
     )
     if rho < float("Inf"):
@@ -144,11 +137,7 @@ def init_plan(a, b, init=None):
     if init is not None:
         return init
     else:
-        return (
-                a[:, None]
-                * b[None, :]
-                / (a.sum() * b.sum()).sqrt()
-        )
+        return a[:, None] * b[None, :] / (a.sum() * b.sum()).sqrt()
 
 
 def compute_local_cost(pi, a, dx, b, dy, eps, rho, rho2, complete_cost=True):
@@ -191,33 +180,21 @@ def compute_local_cost(pi, a, dx, b, dy, eps, rho, rho2, complete_cost=True):
     lcost: torch.Tensor of size [Batch, size_X, size_Y]
     local cost depending on the current transport plan.
     """
-    distxy = torch.einsum(
-        "ij,kj->ik", dx, torch.einsum("kl,jl->kj", dy, pi)
-    )
-    kl_pi = torch.sum(
-        pi * (pi / (a[:, None] * b[None, :]) + 1e-10).log()
-    )
+    distxy = torch.einsum("ij,kj->ik", dx, torch.einsum("kl,jl->kj", dy, pi))
+    kl_pi = torch.sum(pi * (pi / (a[:, None] * b[None, :]) + 1e-10).log())
     if not complete_cost:
-        return - 2 * distxy + eps * kl_pi
+        return -2 * distxy + eps * kl_pi
 
     mu, nu = torch.sum(pi, dim=1), torch.sum(pi, dim=0)
-    distxx = torch.einsum("ij,j->i", dx ** 2, mu)
-    distyy = torch.einsum("kl,l->k", dy ** 2, nu)
+    distxx = torch.einsum("ij,j->i", dx**2, mu)
+    distyy = torch.einsum("kl,l->k", dy**2, nu)
 
     lcost = (distxx[:, None] + distyy[None, :] - 2 * distxy) + eps * kl_pi
 
     if rho < float("Inf"):
-        lcost = (
-                lcost
-                + rho
-                * torch.sum(mu * (mu / a + 1e-10).log())
-        )
+        lcost = lcost + rho * torch.sum(mu * (mu / a + 1e-10).log())
     if rho2 < float("Inf"):
-        lcost = (
-                lcost
-                + rho2
-                * torch.sum(nu * (nu / b + 1e-10).log())
-        )
+        lcost = lcost + rho2 * torch.sum(nu * (nu / b + 1e-10).log())
     return lcost
 
 
@@ -309,24 +286,22 @@ def aprox_softmin(cost, a, b, mass, eps, rho, rho2):
 
     def s_y(g):
         return (
-                -mass
-                * tau2
-                * eps
-                * (
-                        (g / (mass * eps) + b.log())[None, :]
-                        - cost / (mass * eps)
-                ).logsumexp(dim=1)
+            -mass
+            * tau2
+            * eps
+            * ((g / (mass * eps) + b.log())[None, :] - cost / (mass * eps)).logsumexp(
+                dim=1
+            )
         )
 
     def s_x(f):
         return (
-                -mass
-                * tau
-                * eps
-                * (
-                        (f / (mass * eps) + a.log())[:, None]
-                        - cost / (mass * eps)
-                ).logsumexp(dim=0)
+            -mass
+            * tau
+            * eps
+            * ((f / (mass * eps) + a.log())[:, None] - cost / (mass * eps)).logsumexp(
+                dim=0
+            )
         )
 
     return s_x, s_y
@@ -369,24 +344,18 @@ def optimize_mass(lcost, logpi, a, b, eps, rho, rho2):
     """
     ma, mb = a.sum(), b.sum()
     logmu, lognu = logpi.logsumexp(dim=1), logpi.logsumexp(dim=0)
-    mtot = (
-            rho * ma ** 2
-            + rho2 * mb ** 2
-            + eps * (ma * mb) ** 2
-    )
+    mtot = rho * ma**2 + rho2 * mb**2 + eps * (ma * mb) ** 2
     const = (
-            (lcost * logpi.exp()).sum()
-            + 2 * ma * rho * (a * (logmu - a.log())).sum()
-            + 2 * mb * rho2 * (b * (lognu - b.log())).sum()
-            + 2
-            * ma
-            * mb
-            * eps
-            * (
-                    a[:, None]
-                    * b[None, :]
-                    * (logpi - a.log()[:, None] - b.log()[None, :])
-            ).sum()
+        (lcost * logpi.exp()).sum()
+        + 2 * ma * rho * (a * (logmu - a.log())).sum()
+        + 2 * mb * rho2 * (b * (lognu - b.log())).sum()
+        + 2
+        * ma
+        * mb
+        * eps
+        * (
+            a[:, None] * b[None, :] * (logpi - a.log()[:, None] - b.log()[None, :])
+        ).sum()
     )
     return -const / mtot
 
@@ -434,28 +403,24 @@ def log_translate_potential(u, v, lcost, a, b, mass, eps, rho, rho2):
     v: torch.Tensor of size [Batch, size_Y]
     Second dual potential defined on Y.
     """
-    c1 = (
-                 -torch.cat((u, v), 0) / (mass * rho)
-                 + torch.cat((a, b), 0).log()
-         ).logsumexp(dim=0) - torch.log(2 * torch.ones([1]))
+    c1 = (-torch.cat((u, v), 0) / (mass * rho) + torch.cat((a, b), 0).log()).logsumexp(
+        dim=0
+    ) - torch.log(2 * torch.ones([1]))
     c2 = (
         (
-                a.log()[:, None]
-                + b.log()[None, :]
-                + (
-                        (u[:, None] + v[None, :] - lcost)
-                        / (mass * eps)
-                )
-        ).logsumexp(dim=1).logsumexp(dim=0)
+            a.log()[:, None]
+            + b.log()[None, :]
+            + ((u[:, None] + v[None, :] - lcost) / (mass * eps))
+        )
+        .logsumexp(dim=1)
+        .logsumexp(dim=0)
     )
-    z = (0.5 * mass * eps) / (
-            2.0 + 0.5 * (eps / rho) + 0.5 * (eps / rho2))
+    z = (0.5 * mass * eps) / (2.0 + 0.5 * (eps / rho) + 0.5 * (eps / rho2))
     k = z * (c1 - c2)
     return u + k, v + k
 
 
-def log_sinkhorn(lcost, f, g, a, b, mass, eps, rho, rho2, nits_sinkhorn,
-                 tol_sinkhorn):
+def log_sinkhorn(lcost, f, g, a, b, mass, eps, rho, rho2, nits_sinkhorn, tol_sinkhorn):
     """
     Parameters
     ----------
@@ -518,12 +483,9 @@ def log_sinkhorn(lcost, f, g, a, b, mass, eps, rho, rho2, nits_sinkhorn,
         if (f - f_prev).abs().max().item() < tol_sinkhorn:
             break
     logpi = (
-            (
-                    (f[:, None] + g[None, :] - lcost)
-                    / (mass * eps)
-            )
-            + a.log()[:, None]
-            + b.log()[None, :]
+        ((f[:, None] + g[None, :] - lcost) / (mass * eps))
+        + a.log()[:, None]
+        + b.log()[None, :]
     )
     return f, g, logpi
 
@@ -574,18 +536,13 @@ def exp_translate_potential(u, v, ecost, a, b, mass, eps, rho, rho2):
     """
     k = (a * u ** (-eps / rho)).sum()
     k = k + (b * v ** (-eps / rho)).sum()
-    k = k / (2 * (
-            u[:, None] * v[None, :] * ecost *
-            a[:, None] * b[None, :]).sum())
-    z = (0.5 * mass * eps) / (
-            2.0 + 0.5 * (eps / rho) + 0.5 * (eps / rho2)
-    )
-    k = k ** z
+    k = k / (2 * (u[:, None] * v[None, :] * ecost * a[:, None] * b[None, :]).sum())
+    z = (0.5 * mass * eps) / (2.0 + 0.5 * (eps / rho) + 0.5 * (eps / rho2))
+    k = k**z
     return u * k, v * k
 
 
-def exp_sinkhorn(ecost, u, v, a, b, mass, eps, rho, rho2, nits_sinkhorn,
-                 tol_sinkhorn):
+def exp_sinkhorn(ecost, u, v, a, b, mass, eps, rho, rho2, nits_sinkhorn, tol_sinkhorn):
     """
     Parameters
     ----------
@@ -677,15 +634,14 @@ def compute_distance_histograms(a, dx, b, dy):
     lcost: torch.Tensor of size [size_X, size_Y]
     distances between metric histograms
     """
-    h_x = torch.einsum('ij, j->i', dx, a / a.sum())
-    h_y = torch.einsum('ij, j->i', dy, b / b.sum())
-    lcost = (h_x ** 2)[:, None] + (h_y ** 2)[None, :]
+    h_x = torch.einsum("ij, j->i", dx, a / a.sum())
+    h_y = torch.einsum("ij, j->i", dy, b / b.sum())
+    lcost = (h_x**2)[:, None] + (h_y**2)[None, :]
     lcost = lcost - 2 * h_x[:, None] * h_y[None, :]
     return lcost
 
 
-def compute_flb_plan(a, dx, b, dy, eps, rho, rho2, nits_sinkhorn,
-                     tol_sinkhorn):
+def compute_flb_plan(a, dx, b, dy, eps, rho, rho2, nits_sinkhorn, tol_sinkhorn):
     """
     Computes the optimal plan associated to the First Lower Bound (FLB)
     defined in [Memoli 11'].It solved the Unbalanced OT problem between
@@ -735,9 +691,9 @@ def compute_flb_plan(a, dx, b, dy, eps, rho, rho2, nits_sinkhorn,
     lcost = compute_distance_histograms(a, dx, b, dy)
 
     u, v = torch.zeros_like(a), torch.zeros_like(b)
-    u, v = log_translate_potential(u, v, lcost, a, b, 1., eps, rho, rho2)
+    u, v = log_translate_potential(u, v, lcost, a, b, 1.0, eps, rho, rho2)
 
-    s_x, s_y = aprox_softmin(lcost, a, b, 1., eps, rho, rho2)
+    s_x, s_y = aprox_softmin(lcost, a, b, 1.0, eps, rho, rho2)
     for j in range(nits_sinkhorn):
         u_prev = u.clone()
         v = s_x(u)
