@@ -256,4 +256,3 @@ dependencies:
       - y-py==0.5.9
       - yarl==1.9.4
       - ypy-websocket==0.8.2
-prefix: /home/baly/miniconda3/envs/opt
