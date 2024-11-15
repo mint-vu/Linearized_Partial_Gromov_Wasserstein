@@ -18,5 +18,16 @@ conda env create -f environment.yml
 
 `lib/` contains code of partial GW solvers and GW-based methods for all experiments. See `lib/README.md` for references.
 
-## Numerical experiments
-- 
+`shape_retrieval_3d/` contains code for shape retrieval experiment on 3D dataset. See `shape_retrieval_3d/README.md` for details. 
+`shape_retrieval_2d` contains code for shape retrieval experiment on 2D dataset. See `shape_retrieval_2d/README.md` for details
+`mnist` contains code for classification experiment in MNIST dataset. See `mnist/READMe.md` for details
+
+
+## citation
+- In `lib\HK`, the code (LUOT/UOT solver) is imported from https://github.com/bernhard-schmitzer/UnbalancedLOT.
+- In `lib\mpgw`, the code (mpgw sovler) is imported from  https://github.com/lchapel/partial-GW-for-PU
+- In `ellipses\`, the data and code (for visulization) in `utils.py` is imported from https://github.com/Gorgotha/LGW
+- In `shape_retrieval_2d`, we import and modify the code (for 2D data generation and SVM classification) in https://github.com/Gorgotha/LGW.
+- In `shape_retrieval_mvp`, we import and modify the code (for SVM classification) in https://github.com/Gorgotha/LGW.
+
+
