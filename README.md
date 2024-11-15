@@ -32,3 +32,5 @@ conda env create -f environment.yml
 - In `shape_retrieval_2d`, we import and modify the code (for 2D data generation and SVM classification) in https://github.com/Gorgotha/LGW.
 - In `shape_retrieval_3d`, we import and modify the code (for SVM classification) in https://github.com/Gorgotha/LGW.
 
+
+
