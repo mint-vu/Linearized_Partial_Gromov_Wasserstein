@@ -319,3 +319,4 @@ def mm_space_from_img(img,metric="euclidean",normalize_meas =True):
         height /= np.sum(height)
     M = ot.dist(supp,supp,metric=metric)
     return supp,M,height
+
