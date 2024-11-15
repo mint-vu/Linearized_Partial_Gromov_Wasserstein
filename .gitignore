@@ -6,6 +6,8 @@ result/
 results/
 data/
 *.pt 
+*.npz
+
 mvp/results_master/FINAL_NONORM_labels_0.2.12.15_s1_1024_s2_768_ratio_3_n_10_PGW_0.2.npz
 mvp/results_master/FINAL_NONORM_labels_0.2.12.15_s1_1024_s2_768_ratio_3_n_10_PGW_0.4.npz
 mvp/results_master/FINAL_NONORM_labels_0.2.12.15_s1_1024_s2_768_ratio_3_n_10_PGW_0.6.npz

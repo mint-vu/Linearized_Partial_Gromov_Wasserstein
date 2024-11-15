@@ -12,8 +12,80 @@ import warnings
 import time
 from ot.backend import get_backend, NumpyBackend
 from ot.lp import emd
+from tqdm import tqdm
 
 import warnings
+
+from sklearn.neighbors import kneighbors_graph
+from scipy.sparse.csgraph import dijkstra
+
+
+def lot_embeddings(pos_ref,pmf_ref,pos_list,pmf_list):
+    embedding_list=[]
+    n=pos_ref.shape[0]
+    for (pos,pmf) in tqdm(zip(pos_list,pmf_list)):
+        embedding=lot_embedding(pos_ref, pos, pmf_ref, pmf, numItermax=500*n, numThreads=10)
+        embedding_list.append(embedding)
+    return embedding_list
+    
+def pos_to_mm_space(pos,loss='sqrt',loss_param=None):
+    if loss == 'sqrt':
+        M=np.sqrt(cost_matrix_d(pos,pos))
+    if loss== 'square':
+        M=cost_matrix_d(pos,pos)
+    elif loss=='graph':
+        n=loss_param['n_neighbors']
+        knnG1 = kneighbors_graph(pos, n_neighbors=n,mode='distance')
+        M = dijkstra(knnG1,directed=False)
+    n=M.shape[0]
+    pmf=np.ones(n)/n
+    return M,pmf
+
+def upper_triangle_flatten_matrices(k_matrices):
+    K, n, _ = k_matrices.shape
+    result = []
+    # Get the indices of the upper triangular part, excluding the diagonal
+   
+    upper_triangle_indices = np.triu_indices(n, k=0)
+    # Loop through each of the K matrices and extract the upper triangle
+    for i in range(K):
+        
+        flattened_upper_half = k_matrices[i][upper_triangle_indices]
+        result.append(flattened_upper_half)
+    
+    # Convert the result to a single flattened array
+    return np.array(result)
+    
+def vector_to_voxel(vector, shape=(16,16,16)):
+    vec_shape = list(vector.shape[:-1]) + list(shape)
+    voxel = vector.reshape(*vec_shape)
+    return voxel
+
+def voxel_to_pointcloud(voxel, num_points=None, shuffle=True):
+    assert len(voxel.shape)==3, f"Voxel should be a 3D tensor. Given shape {voxel.shape}!=3"
+    x, y, z = np.nonzero(voxel)
+    point_cloud = np.concatenate([np.expand_dims(x,axis=1), np.expand_dims(y,axis=1), np.expand_dims(z,axis=1)], axis=1)
+    if num_points is not None:
+        if point_cloud.shape[0] >= num_points:
+            ids = list(range(point_cloud.shape[0]))
+            ids = ids[:num_points] if shuffle==False else np.random.permutation(ids)[:num_points]
+            point_cloud = point_cloud[ids,:]
+        else:
+            diff = num_points - len(point_cloud)
+            padding = np.zeros([diff, 3])
+            point_cloud = np.concatenate([point_cloud, padding], axis=0)
+            ids = list(range(len(point_cloud)))
+            ids = ids[:num_points] if shuffle==False else np.random.permutation(ids)[:num_points]
+            point_cloud = point_cloud[ids,:]
+    return point_cloud
+
+
+def vector_to_pointcloud(vector, num_points=None, shuffle=True):
+    voxel = vector_to_voxel(vector)
+    voxel = np.squeeze(voxel)
+    point_cloud = voxel_to_pointcloud(voxel, num_points, shuffle)
+    return point_cloud
+
 
 def lot_embedding(X0,X1,p0,p1,numItermax=100000,numThreads=10):
     #C = np.asarray(C, dtype=np.float64, order='C')
@@ -160,7 +232,6 @@ def lgw_procedure(M_ref,height_ref,posns,Ms,heights,max_iter = 1000,loss='square
             bps.append(bp)
     else:
         embeddings,bps=emb
-
     #LGW computation
     lgw = np.zeros((N,N))
     for i in range(N):
