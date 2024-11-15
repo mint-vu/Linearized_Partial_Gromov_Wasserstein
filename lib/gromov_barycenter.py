@@ -107,184 +107,6 @@ clf=PCA(n_components=2)
 
 
 
-
-
-# It is referenced from PythonOT (https://pythonot.github.io/)
-def gromov_barycenters(
-        N, Cs, ps=None, p=None, lambdas=None, loss_fun='square_loss',
-        symmetric=True, armijo=False, max_iter=1000, tol=1e-9,
-        stop_criterion='barycenter', warmstartT=False, verbose=False,
-        log=False, init_C=None, random_state=None, **kwargs):
-    r"""
-    Returns the Gromov-Wasserstein barycenters of `S` measured similarity matrices :math:`(\mathbf{C}_s)_{1 \leq s \leq S}`
-
-    The function solves the following optimization problem with block coordinate descent:
-
-    .. math::
-
-        \mathbf{C}^* = \mathop{\arg \min}_{\mathbf{C}\in \mathbb{R}^{N \times N}} \quad \sum_s \lambda_s \mathrm{GW}(\mathbf{C}, \mathbf{C}_s, \mathbf{p}, \mathbf{p}_s)
-
-    Where :
-
-    - :math:`\mathbf{C}_s`: metric cost matrix
-    - :math:`\mathbf{p}_s`: distribution
-
-    Parameters
-    ----------
-    N : int
-        Size of the targeted barycenter
-    Cs : list of S array-like of shape (ns, ns)
-        Metric cost matrices
-    ps : list of S array-like of shape (ns,), optional
-        Sample weights in the `S` spaces.
-        If let to its default value None, uniform distributions are taken.
-    p : array-like, shape (N,), optional
-        Weights in the targeted barycenter.
-        If let to its default value None, uniform distribution is taken.
-    lambdas : list of float, optional
-        List of the `S` spaces' weights.
-        If let to its default value None, uniform weights are taken.
-    loss_fun : callable, optional
-        tensor-matrix multiplication function based on specific loss function
-    symmetric : bool, optional.
-        Either structures are to be assumed symmetric or not. Default value is True.
-        Else if set to True (resp. False), C1 and C2 will be assumed symmetric (resp. asymmetric).
-    armijo : bool, optional
-        If True the step of the line-search is found via an armijo research.
-        Else closed form is used. If there are convergence issues use False.
-    max_iter : int, optional
-        Max number of iterations
-    tol : float, optional
-        Stop threshold on relative error (>0)
-    stop_criterion : str, optional. Default is 'barycenter'.
-        Stop criterion taking values in ['barycenter', 'loss']. If set to 'barycenter'
-        uses absolute norm variations of estimated barycenters. Else if set to 'loss'
-        uses the relative variations of the loss.
-    warmstartT: bool, optional
-        Either to perform warmstart of transport plans in the successive
-        fused gromov-wasserstein transport problems.s
-    verbose : bool, optional
-        Print information along iterations.
-    log : bool, optional
-        Record log if True.
-    init_C : bool | array-like, shape(N,N)
-        Random initial value for the :math:`\mathbf{C}` matrix provided by user.
-    random_state : int or RandomState instance, optional
-        Fix the seed for reproducibility
-
-    Returns
-    -------
-    C : array-like, shape (`N`, `N`)
-        Similarity matrix in the barycenter space (permutated arbitrarily)
-    log : dict
-        Only returned when log=True. It contains the keys:
-
-        - :math:`\mathbf{T}`: list of (`N`, `ns`) transport matrices
-        - :math:`\mathbf{p}`: (`N`,) barycenter weights
-        - values used in convergence evaluation.
-
-    References
-    ----------
-    .. [12] Gabriel Peyré, Marco Cuturi, and Justin Solomon,
-        "Gromov-Wasserstein averaging of kernel and distance matrices."
-        International Conference on Machine Learning (ICML). 2016.
-
-    """
-    if stop_criterion not in ['barycenter', 'loss']:
-        raise ValueError(f"Unknown `stop_criterion='{stop_criterion}'`. Use one of: {'barycenter', 'loss'}.")
-
-    Cs = list_to_array(*Cs)
-    arr = [*Cs]
-    if ps is not None:
-        arr += list_to_array(*ps)
-    else:
-        ps = [unif(C.shape[0], type_as=C) for C in Cs]
-    if p is not None:
-        arr.append(list_to_array(p))
-    else:
-        p = unif(N, type_as=Cs[0])
-
-    nx = get_backend(*arr)
-
-    S = len(Cs)
-    if lambdas is None:
-        lambdas = [1. / S] * S
-
-    # Initialization of C : random SPD matrix (if not provided by user)
-    if init_C is None:
-        generator = check_random_state(random_state)
-        xalea = generator.randn(N, 2)
-        C = dist(xalea, xalea)
-        C /= C.max()
-        C = nx.from_numpy(C, type_as=p)
-    else:
-        C = init_C
-
-    cpt = 0
-    err = 1e15  # either the error on 'barycenter' or 'loss'
-
-    if warmstartT:
-        T = [None] * S
-
-    if stop_criterion == 'barycenter':
-        inner_log = False
-    else:
-        inner_log = True
-        curr_loss = 1e15
-
-    if log:
-        log_ = {}
-        log_['err'] = []
-        if stop_criterion == 'loss':
-            log_['loss'] = []
-
-    while (err > tol and cpt < max_iter):
-        if stop_criterion == 'barycenter':
-            Cprev = C
-        else:
-            prev_loss = curr_loss
-
-        # get transport plans
-        if warmstartT:
-            res = [gromov_wasserstein(
-                C, Cs[s], p, ps[s], loss_fun, symmetric=symmetric, armijo=armijo, G0=T[s],
-                max_iter=max_iter, tol_rel=1e-5, tol_abs=0., log=inner_log, verbose=verbose, **kwargs)
-                for s in range(S)]
-        else:
-            res = [gromov_wasserstein(
-                C, Cs[s], p, ps[s], loss_fun, symmetric=symmetric, armijo=armijo, G0=None,
-                max_iter=max_iter, tol_rel=1e-5, tol_abs=0., log=inner_log, verbose=verbose, **kwargs)
-                for s in range(S)]
-
-        T = res
-
-        # update barycenters
-        if loss_fun == 'square_loss':
-            C = pgw_update_square_loss_nb(p, lambdas, T, Cs)        
-
-        # update convergence criterion
-        #if stop_criterion == 'barycenter':
-        err = nx.norm(C - Cprev)
-        if log:
-            log_['err'].append(err)
-
-        if verbose:
-            if cpt % 200 == 0:
-                print('{:5s}|{:12s}'.format(
-                    'It.', 'Err') + '\n' + '-' * 19)
-            print('{:5d}|{:8e}|'.format(cpt, err))
-
-        cpt += 1
-
-    if log:
-        log_['T'] = T
-        log_['p'] = p
-
-        return C, log_
-    else:
-        return C
-
-
 # This function is referenced from PythonOT
 def update_square_loss(p, lambdas, T, Cs, nx=None):
     r"""
@@ -585,18 +407,12 @@ def pgw_barycenters(
 
         # get transport plans
         res = [partial_gromov_ver1(
-                C, Cs[s], p, ps[s], Lambda_list[s], G0=None,
-                numItermax_gw=max_iter, tol=1e-5, log=inner_log, verbose=verbose, **kwargs)
+                C, Cs[s], p, ps[s], Lambda_list[s], G0=None, tol=1e-5, log=inner_log, verbose=verbose, **kwargs)
                 for s in range(S)]
-        
-        # print('p mass is', p.sum())
-        # print('mass in first',res[0].sum())
-        # print('mass in second',res[1].sum())
+   
        
         T = res
-        # else:
-        #     T = [output[0] for output in res]
-        #     curr_loss = np.sum([output[1]['gw_dist'] for output in res])
+
 
         # update barycenters
         if loss_fun == 'square_loss':
@@ -767,7 +583,7 @@ def mpgw_barycenters(
         # get transport plans
         res = [partial_gromov_wasserstein(
                 C, Cs[s], p, ps[s], mass_list[s], G0=None,
-                numItermax_gw=max_iter, tol=1e-5, log=inner_log, verbose=verbose, **kwargs)
+                tol=1e-5, log=inner_log, verbose=verbose, **kwargs)
                 for s in range(S)]
         
        
@@ -787,6 +603,183 @@ def mpgw_barycenters(
             if log:
                 log_['err'].append(err)
 
+
+        if verbose:
+            if cpt % 200 == 0:
+                print('{:5s}|{:12s}'.format(
+                    'It.', 'Err') + '\n' + '-' * 19)
+            print('{:5d}|{:8e}|'.format(cpt, err))
+
+        cpt += 1
+
+    if log:
+        log_['T'] = T
+        log_['p'] = p
+
+        return C, log_
+    else:
+        return C
+
+
+
+def gw_barycenters(
+        N, Cs, ps=None, p=None, lambdas=None, loss_fun='square_loss',
+        symmetric=True,max_iter=400, numItermax=None, tol=1e-7,
+        stop_criterion='barycenter', warmstartT=False, verbose=False,
+        log=False, init_C=None, random_state=None, **kwargs):
+    r"""
+    Returns the Gromov-Wasserstein barycenters of `S` measured similarity matrices :math:`(\mathbf{C}_s)_{1 \leq s \leq S}`
+
+    The function solves the following optimization problem with block coordinate descent:
+
+    .. math::
+
+        \mathbf{C}^* = \mathop{\arg \min}_{\mathbf{C}\in \mathbb{R}^{N \times N}} \quad \sum_s \lambda_s \mathrm{GW}(\mathbf{C}, \mathbf{C}_s, \mathbf{p}, \mathbf{p}_s)
+
+    Where :
+
+    - :math:`\mathbf{C}_s`: metric cost matrix
+    - :math:`\mathbf{p}_s`: distribution
+
+    Parameters
+    ----------
+    N : int
+        Size of the targeted barycenter
+    Cs : list of S array-like of shape (ns, ns)
+        Metric cost matrices
+    ps : list of S array-like of shape (ns,), optional
+        Sample weights in the `S` spaces.
+        If let to its default value None, uniform distributions are taken.
+    p : array-like, shape (N,), optional
+        Weights in the targeted barycenter.
+        If let to its default value None, uniform distribution is taken.
+    lambdas : list of float, optional
+        List of the `S` spaces' weights.
+        If let to its default value None, uniform weights are taken.
+    loss_fun : callable, optional
+        tensor-matrix multiplication function based on specific loss function
+    symmetric : bool, optional.
+        Either structures are to be assumed symmetric or not. Default value is True.
+        Else if set to True (resp. False), C1 and C2 will be assumed symmetric (resp. asymmetric).
+    armijo : bool, optional
+        If True the step of the line-search is found via an armijo research.
+        Else closed form is used. If there are convergence issues use False.
+    max_iter : int, optional
+        Max number of iterations
+    tol : float, optional
+        Stop threshold on relative error (>0)
+    stop_criterion : str, optional. Default is 'barycenter'.
+        Stop criterion taking values in ['barycenter', 'loss']. If set to 'barycenter'
+        uses absolute norm variations of estimated barycenters. Else if set to 'loss'
+        uses the relative variations of the loss.
+    warmstartT: bool, optional
+        Either to perform warmstart of transport plans in the successive
+        fused gromov-wasserstein transport problems.s
+    verbose : bool, optional
+        Print information along iterations.
+    log : bool, optional
+        Record log if True.
+    init_C : bool | array-like, shape(N,N)
+        Random initial value for the :math:`\mathbf{C}` matrix provided by user.
+    random_state : int or RandomState instance, optional
+        Fix the seed for reproducibility
+
+    Returns
+    -------
+    C : array-like, shape (`N`, `N`)
+        Similarity matrix in the barycenter space (permutated arbitrarily)
+    log : dict
+        Only returned when log=True. It contains the keys:
+
+        - :math:`\mathbf{T}`: list of (`N`, `ns`) transport matrices
+        - :math:`\mathbf{p}`: (`N`,) barycenter weights
+        - values used in convergence evaluation.
+
+    References
+    ----------
+    .. [12] Gabriel Peyré, Marco Cuturi, and Justin Solomon,
+        "Gromov-Wasserstein averaging of kernel and distance matrices."
+        International Conference on Machine Learning (ICML). 2016.
+
+    """
+    if stop_criterion not in ['barycenter', 'loss']:
+        raise ValueError(f"Unknown `stop_criterion='{stop_criterion}'`. Use one of: {'barycenter', 'loss'}.")
+
+    #Cs = list_to_array(*Cs)
+    arr = [*Cs]
+    if ps is not None:
+        arr += list_to_array(*ps)
+    else:
+        ps = [unif(C.shape[0], type_as=C) for C in Cs]
+    if p is not None:
+        arr.append(list_to_array(p))
+    else:
+        p = unif(N, type_as=Cs[0])
+
+    nx = get_backend(*arr)
+
+    S = len(Cs)
+    if lambdas is None:
+        lambdas = [1. / S] * S
+
+    # Initialization of C : random SPD matrix (if not provided by user)
+    if init_C is None:
+        generator = check_random_state(random_state)
+        xalea = generator.randn(N, 2)
+        C = dist(xalea, xalea)
+        C /= C.max()
+        C = nx.from_numpy(C, type_as=p)
+    else:
+        C = init_C
+
+    cpt = 0
+    err = 1e15  # either the error on 'barycenter' or 'loss'
+
+    if warmstartT:
+        T = [None] * S
+
+    if stop_criterion == 'barycenter':
+        inner_log = False
+    else:
+        inner_log = True
+        curr_loss = 1e15
+
+    if log:
+        log_ = {}
+        log_['err'] = []
+        if stop_criterion == 'loss':
+            log_['loss'] = []
+    if numItermax is None:
+        numItermax=100*N
+    while (err > tol and cpt < max_iter):
+        print('loop in barycenter is %i/%i'%(cpt,max_iter), end='\r')
+        if stop_criterion == 'barycenter':
+            Cprev = C
+        else:
+            prev_loss = curr_loss
+        
+        if warmstartT:
+            res = [gromov_wasserstein(
+                C, Cs[s], p, ps[s], G0=T[s],
+                numItermax=numItermax, tol=1e-7, log=inner_log, verbose=verbose)
+                for s in range(S)]
+        else:
+            res = [gromov_wasserstein(
+                C, Cs[s], p, ps[s], G0=None,
+                numItermax=numItermax, tol=1e-7, log=inner_log, verbose=verbose)
+                for s in range(S)]
+
+        T = res
+
+        # update barycenters
+        if loss_fun == 'square_loss':
+            C = pgw_update_square_loss_nb(p, lambdas, T, Cs)        
+
+        # update convergence criterion
+        #if stop_criterion == 'barycenter':
+        err = nx.norm(C - Cprev)
+        if log:
+            log_['err'].append(err)
 
         if verbose:
             if cpt % 200 == 0:

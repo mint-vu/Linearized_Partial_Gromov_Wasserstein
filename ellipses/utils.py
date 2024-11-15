@@ -9,7 +9,7 @@ sys.path.append(os.path.join(BASE_DIR, '..'))
 
 from lib.gromov import cost_matrix_d
 
-def mm_space_from_img(img, normalize_meas=True):
+def mm_space_from_img(img, normalize_meas=False):
     supp = np.dstack(np.where(img > 0))[0]
     height = img[supp[:,0],supp[:,1]]
     if normalize_meas:
@@ -80,8 +80,8 @@ def plot_2d_shape_embedding(data, embedding, min_dist, figsize, cutoff=5, font_s
     axex.tick_params(axis='both', which='major', labelsize=font_size - 4)
     
 
-    if save_path is not None:
-        print("test")
-        plt.savefig(save_path + ".png", transparent=True)
-        plt.savefig(save_path + ".pdf", transparent=True)
-    plt.show()
+    # if save_path is not None:
+    #     print("test")
+    #     plt.savefig(save_path + ".png", transparent=True)
+    #     plt.savefig(save_path + ".pdf", transparent=True)
+    #plt.show()

@@ -455,7 +455,8 @@ def gromov_wasserstein(
     np.testing.assert_almost_equal(
         p.sum(0), q.sum(0), err_msg="a and b vector must have the same sum", decimal=6
     )
-
+    C1=np.array(C1,dtype=np.float64)
+    C2=np.array(C2,dtype=np.float64)
     if G0 is None:
         G0 = np.outer(p, q) / np.sum(p)
 
@@ -567,7 +568,7 @@ def construct_M(C1, C2):
         for j in range(m):
             for i1 in range(n):
                 for j1 in range(m):
-                    M[i, j, i1, j1] = L(C1[i, i1], C2[j, j1])
+                    M[i, j, i1, j1] = (C1[i, i1]-C2[j, j1])**2
     return M
 
 
@@ -739,7 +740,7 @@ def partial_gromov_ver1(
     mu_extended, nu_extended, M_extended = (
         np.zeros(n + 1),
         np.zeros(m + 1),
-        np.zeros((n + 1, m + 1)),
+        np.full((n + 1, m + 1),-1e-15),
     )
     mu_extended[0:n], mu_extended[-1] = p, q_sum
     nu_extended[0:m], nu_extended[-1] = q, p_sum
